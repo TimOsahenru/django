@@ -126,6 +126,13 @@ class GetDefaultUsernameTestCase(TestCase):
     def test_actual_implementation(self):
         self.assertIsInstance(management.get_system_username(), str)
 
+    def test_getuser_raises_exception(self):
+        # TODO: Drop ImportError and KeyError when dropping support for PY312.
+        for exc in (ImportError, KeyError, OSError):
+            with self.subTest(exc=str(exc)):
+                with mock.patch("getpass.getuser", side_effect=exc):
+                    self.assertEqual(management.get_system_username(), "")
+
     def test_simple(self):
         management.get_system_username = lambda: "joe"
         self.assertEqual(management.get_default_username(), "joe")
@@ -193,7 +200,10 @@ class ChangepasswordManagementCommandTestCase(TestCase):
 
     @mock.patch.object(changepassword.Command, "_get_pass", return_value="not qwerty")
     def test_that_changepassword_command_changes_joes_password(self, mock_get_pass):
-        "Executing the changepassword management command should change joe's password"
+        """
+        Executing the changepassword management command should change joe's
+        password
+        """
         self.assertTrue(self.user.check_password("qwerty"))
 
         call_command("changepassword", username="joe", stdout=self.stdout)
@@ -406,7 +416,10 @@ class CreatesuperuserManagementCommandTestCase(TestCase):
 
     @override_settings(AUTH_USER_MODEL="auth_tests.CustomUser")
     def test_swappable_user_missing_required_field(self):
-        "A Custom superuser won't be created when a required field isn't provided"
+        """
+        A Custom superuser won't be created when a required field isn't
+        provided
+        """
         # We can use the management command to create a superuser
         # We skip validation because the temporary substitution of the
         # swappable User model messes with validation.

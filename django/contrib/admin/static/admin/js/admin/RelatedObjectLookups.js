@@ -55,8 +55,9 @@
         if (elem.classList.contains('vManyToManyRawIdAdminField') && elem.value) {
             elem.value += ',' + chosenId;
         } else {
-            document.getElementById(name).value = chosenId;
+            elem.value = chosenId;
         }
+        $(elem).trigger('change');
         const index = relatedWindows.indexOf(win);
         if (index > -1) {
             relatedWindows.splice(index, 1);
@@ -112,6 +113,10 @@
                 // Update SelectBox cache for related fields.
                 if (window.SelectBox !== undefined && !SelectBox.cache[currentSelect.id]) {
                     SelectBox.add_to_cache(select.id, option);
+                    // Sort if there are any groups present
+                    if (SelectBox.cache[select.id].some(item => item.group)) {
+                        SelectBox.sort(select.id);
+                    }
                     SelectBox.redisplay(select.id);
                 }
                 return;
@@ -122,7 +127,7 @@
         });
     }
 
-    function dismissAddRelatedObjectPopup(win, newId, newRepr) {
+    function dismissAddRelatedObjectPopup(win, newId, newRepr, optgroup) {
         const name = removePopupIndex(win.name);
         const elem = document.getElementById(name);
         if (elem) {
@@ -142,8 +147,13 @@
         } else {
             const toId = name + "_to";
             const toElem = document.getElementById(toId);
-            const o = new Option(newRepr, newId);
-            SelectBox.add_to_cache(toId, o);
+            const newOption = new Option(newRepr, newId);
+            newOption.group = optgroup;
+            SelectBox.add_to_cache(toId, newOption);
+            // Sort if there are any groups present
+            if (SelectBox.cache[toId].some(item => item.group)) {
+                SelectBox.sort(toId);
+            }
             SelectBox.redisplay(toId);
             if (toElem && toElem.nodeName.toUpperCase() === 'SELECT') {
                 const skipIds = [name + "_from"];
@@ -205,6 +215,7 @@
     window.dismissChangeRelatedObjectPopup = dismissChangeRelatedObjectPopup;
     window.dismissDeleteRelatedObjectPopup = dismissDeleteRelatedObjectPopup;
     window.dismissChildPopups = dismissChildPopups;
+    window.relatedWindows = relatedWindows;
 
     // Kept for backward compatibility
     window.showAddAnotherPopup = showRelatedObjectPopup;

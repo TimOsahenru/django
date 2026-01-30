@@ -3,14 +3,13 @@ accessor
 accessors
 Aceh
 admindocs
-affine
 affordances
+ai
 Ai
 Alchin
 allowlist
 alphanumerics
 amet
-analytics
 arccosine
 architected
 arcsine
@@ -41,6 +40,7 @@ backport
 backported
 backports
 backtick
+backticks
 backtraces
 balancer
 basename
@@ -60,7 +60,6 @@ Bokmål
 Bonham
 bookmarklet
 bookmarklets
-boolean
 booleans
 bpython
 Bronn
@@ -114,11 +113,9 @@ Danga
 Darussalam
 databrowse
 datafile
-dataset
-datasets
 datetimes
 declaratively
-decrementing
+deconstructible
 deduplicates
 deduplication
 deepcopy
@@ -129,7 +126,6 @@ deserialize
 deserialized
 deserializer
 deserializing
-deterministically
 Deutsch
 dev
 dictConfig
@@ -157,15 +153,14 @@ editability
 encodings
 Endian
 Enero
+enqueueing
 enum
 environ
 esque
 Ess
 ETag
 ETags
-exe
 exfiltration
-extensibility
 fallbacks
 favicon
 fieldset
@@ -175,7 +170,6 @@ filesystems
 flatpage
 flatpages
 focusable
-fooapp
 formatter
 formatters
 formfield
@@ -198,6 +192,7 @@ gis
 GiST
 Googol
 Greenhill
+Granian
 gunicorn
 GZip
 gzipped
@@ -208,7 +203,6 @@ hashable
 hasher
 hashers
 headerlist
-hoc
 Hoerner
 Holovaty
 Homebrew
@@ -221,7 +215,6 @@ Hypercorn
 ies
 iframe
 Igbo
-incrementing
 indexable
 ing
 ini
@@ -238,7 +231,6 @@ iterable
 iterables
 iteratively
 ize
-Jazzband
 Jinja
 jQuery
 Jupyter
@@ -254,6 +246,8 @@ kwargs
 Kyrgyz
 latin
 lawrence
+lexeme
+lexemes
 Libera
 lifecycle
 lifecycles
@@ -281,7 +275,6 @@ manouche
 Marino
 memcache
 memcached
-mentorship
 metaclass
 metaclasses
 metre
@@ -320,9 +313,11 @@ Nanggroe
 natively
 nd
 needsinfo
+needsnewfeatureprocess
 německy
 nginx
 noding
+nonces
 nonnegative
 nullable
 OAuth
@@ -336,8 +331,6 @@ orm
 Outdim
 outfile
 paginator
-parallelization
-parallelized
 parameterization
 params
 parens
@@ -359,9 +352,7 @@ pluggable
 pluralizations
 pooler
 postfix
-postgis
 postgres
-postgresql
 pragma
 pre
 precisions
@@ -374,7 +365,6 @@ prefetches
 prefetching
 preload
 preloaded
-prepend
 prepended
 prepending
 prepends
@@ -427,7 +417,6 @@ reflow
 registrable
 reimplement
 reindent
-reindex
 releaser
 releasers
 reloader
@@ -437,7 +426,6 @@ repo
 reportable
 reprojection
 reraising
-resampling
 reST
 reStructuredText
 reusability
@@ -445,7 +433,6 @@ reverter
 roadmap
 Roald
 rss
-runtime
 Sandvik
 savepoint
 savepoints
@@ -456,7 +443,6 @@ screencasts
 semimajor
 semiminor
 serializability
-serializable
 serializer
 serializers
 shapefile
@@ -465,7 +451,6 @@ sharding
 sitewide
 sliceable
 SMTP
-solaris
 Sorani
 sortable
 Spectre
@@ -531,9 +516,9 @@ titlecase
 tokenized
 toolkits
 toolset
+tooltip
 trac
 tracebacks
-transactional
 Transifex
 Tredinnick
 triager
@@ -549,12 +534,14 @@ unapplied
 unapplying
 uncategorized
 unclaim
+unclosed
 uncopyable
 unencoded
 unencrypted
 unescape
 unescaped
 unevaluated
+unfetched
 unglamorous
 ungrouped
 unhandled
