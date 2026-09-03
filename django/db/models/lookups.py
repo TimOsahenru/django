@@ -1,5 +1,6 @@
 import itertools
 import math
+from collections.abc import Iterator
 
 from django.core.exceptions import EmptyResultSet, FullResultSet
 from django.db.models.expressions import (
@@ -151,11 +152,16 @@ class Lookup(Expression):
         # expression unless they're wrapped in a CASE WHEN.
         wrapped = False
         exprs = []
-        for expr in (self.lhs, self.rhs):
-            if connection.ops.conditional_expression_supported_in_where_clause(expr):
-                expr = Case(When(expr, then=True), default=False)
-                wrapped = True
-            exprs.append(expr)
+        if getattr(self.lhs, "conditional", False) and getattr(
+            self.rhs, "conditional", False
+        ):
+            for expr in (self.lhs, self.rhs):
+                if connection.ops.conditional_expression_supported_in_where_clause(
+                    expr
+                ):
+                    expr = Case(When(expr, then=True), default=False)
+                    wrapped = True
+                exprs.append(expr)
         lookup = type(self)(*exprs) if wrapped else self
         return lookup.as_sql(compiler, connection)
 
@@ -287,7 +293,9 @@ class FieldGetDbPrepValueIterableMixin(FieldGetDbPrepValueMixin):
     def get_prep_lookup(self):
         if hasattr(self.rhs, "resolve_expression"):
             return self.rhs
-        if any(hasattr(value, "resolve_expression") for value in self.rhs):
+        # Prevent iterator from being consumed by any().
+        rhs = list(self.rhs) if isinstance(self.rhs, Iterator) else self.rhs
+        if any(hasattr(value, "resolve_expression") for value in rhs):
             # Wrap direct values in Value expressions so they are handled by
             # the database at compilation time, along with other expressions.
             return ExpressionList(
@@ -297,11 +305,11 @@ class FieldGetDbPrepValueIterableMixin(FieldGetDbPrepValueMixin):
                         if hasattr(value, "resolve_expression")
                         else Value(value, getattr(self.lhs, "output_field", None))
                     )
-                    for value in self.rhs
+                    for value in rhs
                 ]
             )
         prepared_values = []
-        for rhs_value in self.rhs:
+        for rhs_value in rhs:
             if (
                 self.prepare_rhs
                 and hasattr(self.lhs, "output_field")
@@ -578,31 +586,40 @@ class PatternLookup(BuiltinLookup):
     prepare_rhs = False
 
     def get_rhs_op(self, connection, rhs):
-        # Assume we are in startswith. We need to produce SQL like:
-        #     col LIKE %s, ['thevalue%']
-        # For python values we can (and should) do that directly in Python,
-        # but if the value is for example reference to other column, then
-        # we need to add the % pattern match to the lookup by something like
+        # If the lookup value is a reference to another column or a transform,
+        # then the SQL is something like:
         #     col LIKE othercol || '%%'
-        # So, for Python values we don't need any special pattern, but for
-        # SQL reference values or SQL transformations we need the correct
-        # pattern added.
-        if hasattr(self.rhs, "as_sql") or self.bilateral_transforms:
+        if not self.is_simple_lookup:
+            # In that case, prepare the LIKE clause using
+            # DatabaseWrapper.pattern_ops.
             pattern = connection.pattern_ops[self.lookup_name].format(
                 connection.pattern_esc
             )
             return pattern.format(rhs)
         else:
+            # Otherwise, use the LIKE in DatabaseWrapper.operators.
             return super().get_rhs_op(connection, rhs)
 
     def process_rhs(self, qn, connection):
         rhs, params = super().process_rhs(qn, connection)
-        if self.rhs_is_direct_value() and params and not self.bilateral_transforms:
-            params = (
-                self.param_pattern % connection.ops.prep_for_like_query(params[0]),
-                *params[1:],
-            )
+        # Assume the lookup is startswith. For simple lookups involving a
+        # Python value like "thevalue", the (SQL, params) is something like:
+        #     ("col LIKE %s", ['thevalue%'])
+        if self.is_simple_lookup:
+            # Prepare the lookup parameter, a Python value, for use in a LIKE
+            # clause, usually by adding % signs to the beginning and/or end of
+            # the value.
+            param = connection.ops.prep_for_like_query(params[0])
+            if connection.features.pattern_lookup_needs_param_pattern:
+                param = self.param_pattern % param
+            params = (param, *params[1:])
         return rhs, params
+
+    @property
+    def is_simple_lookup(self):
+        # A "simple lookup" is a Python value (as long as it's not a bilateral
+        # transform).
+        return self.rhs_is_direct_value() and not self.bilateral_transforms
 
 
 @Field.register_lookup

@@ -28,6 +28,7 @@ class DatabaseFeatures(BaseDatabaseFeatures):
     supports_over_clause = True
     supports_frame_range_fixed_distance = True
     supports_update_conflicts = True
+    supports_default_in_bit_aggregations = False
     can_rename_index = True
     delete_can_self_reference_subquery = False
     create_test_procedure_without_params_sql = """
@@ -235,6 +236,10 @@ class DatabaseFeatures(BaseDatabaseFeatures):
         if self.connection.mysql_is_mariadb:
             return self.connection.mysql_version >= (11, 7)
         return False
+
+    supports_uuid4_function_in_default = property(
+        operator.attrgetter("supports_uuid4_function")
+    )
 
     @cached_property
     def supports_uuid7_function(self):

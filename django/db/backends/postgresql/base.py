@@ -216,15 +216,19 @@ class DatabaseWrapper(BaseDatabaseWrapper):
             # Ensure we run in autocommit, Django properly sets it later on.
             connect_kwargs["autocommit"] = True
             enable_checks = self.settings_dict["CONN_HEALTH_CHECKS"]
+            # Copy to avoid mutating the user's settings dict.
+            pool_options = {**pool_options}
+            pool_options.setdefault(
+                "check", ConnectionPool.check_connection if enable_checks else None
+            )
             pool = ConnectionPool(
                 kwargs=connect_kwargs,
                 open=False,  # Do not open the pool during startup.
                 configure=self._configure_connection,
-                check=ConnectionPool.check_connection if enable_checks else None,
                 **pool_options,
             )
             # setdefault() ensures that multiple threads don't set this in
-            # parallel. Since we do not open the pool during it's init above,
+            # parallel. Since we do not open the pool during its init above,
             # this means that at worst during startup multiple threads generate
             # pool objects and the first to set it wins.
             self._connection_pools.setdefault(self.alias, pool)

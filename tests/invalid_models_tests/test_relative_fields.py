@@ -1579,17 +1579,43 @@ class RelatedQueryNameClashWithManagerTests(SimpleTestCase):
             Author.check(),
             [
                 Error(
-                    "Related name 'authors' for 'Author.mentor' clashes with the name "
-                    "of a model manager.",
+                    "Related name 'authors' for 'invalid_models_tests.Author.mentor' "
+                    "clashes with the name of a model manager.",
                     hint=(
                         "Rename the model manager or change the related_name argument "
-                        "in the definition for field 'Author.mentor'."
+                        "in the definition for field "
+                        "'invalid_models_tests.Author.mentor'."
                     ),
                     obj=Author._meta.get_field("mentor"),
                     id="fields.E348",
                 )
             ],
         )
+
+    def test_clash_between_rel_name_and_manager_non_self_referential(self):
+        class Thing(models.Model):
+            items = models.Manager()
+
+        class Item(models.Model):
+            thing = models.ForeignKey(Thing, models.CASCADE, related_name="items")
+            something = models.ForeignKey(Thing, models.CASCADE, related_name="+")
+
+        self.assertEqual(
+            Item.check(),
+            [
+                Error(
+                    "Related name 'items' for 'invalid_models_tests.Item.thing' "
+                    "clashes with the name of a model manager.",
+                    hint=(
+                        "Rename the model manager or change the related_name argument "
+                        "in the definition for field 'invalid_models_tests.Item.thing'."
+                    ),
+                    obj=Item._meta.get_field("thing"),
+                    id="fields.E348",
+                )
+            ],
+        )
+        self.assertEqual(Thing.check(), [])
 
 
 @isolate_apps("invalid_models_tests")
@@ -2471,6 +2497,48 @@ class DatabaseLevelOnDeleteTests(TestCase):
                     obj=field,
                     id="fields.E323",
                 )
+            ],
+        )
+
+    @skipUnlessDBFeature("supports_on_delete_db_cascade")
+    def test_db_python_m2m_chain(self):
+        class OtherModelParent(models.Model):
+            pass
+
+        class OtherModel(models.Model):
+            parent = models.ForeignKey(OtherModelParent, on_delete=models.DB_CASCADE)
+
+        class Parent(models.Model):
+            pass
+
+        class Child(models.Model):
+            parent = models.ForeignKey(Parent, on_delete=models.DB_CASCADE)
+            other_models = models.ManyToManyField(OtherModel)
+
+        field = Child._meta.get_field("other_models")
+        self.assertEqual(
+            field.check(from_model=Child, databases=self.databases),
+            [
+                Error(
+                    "Field specifies database-level on_delete variant, but "
+                    "auto-created intermediary model uses Python-level variant.",
+                    hint=(
+                        "Use either one of the Python on_delete variants or create a "
+                        "through model for invalid_models_tests.Child.other_models."
+                    ),
+                    obj=Child._meta.get_field("parent"),
+                    id="fields.E323",
+                ),
+                Error(
+                    "Field specifies database-level on_delete variant, but "
+                    "auto-created intermediary model uses Python-level variant.",
+                    hint=(
+                        "Use either one of the Python on_delete variants or create a "
+                        "through model for invalid_models_tests.Child.other_models."
+                    ),
+                    obj=OtherModel._meta.get_field("parent"),
+                    id="fields.E323",
+                ),
             ],
         )
 

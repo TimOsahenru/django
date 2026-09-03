@@ -17,7 +17,7 @@ from django.db.migrations.loader import MigrationLoader
 from django.db.migrations.recorder import MigrationRecorder
 from django.test import TestCase, modify_settings, override_settings
 
-from .test_base import MigrationTestBase
+from .base import MigrationTestBase
 
 
 class RecorderTests(TestCase):
@@ -698,7 +698,9 @@ class LoaderTests(TestCase):
             test_settings.write(f"INSTALLED_APPS += {INSTALLED_APPS}\n")
 
         test_environ = os.environ.copy()
-        test_environ["PYTHONPATH"] = str(tests_dir)
+        test_python_path = sys.path.copy()
+        test_python_path.append(str(tests_dir))
+        test_environ["PYTHONPATH"] = os.pathsep.join(test_python_path)
         # Ensure deterministic failures.
         test_environ["PYTHONHASHSEED"] = "1"
 

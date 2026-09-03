@@ -35,6 +35,13 @@ class Foo(models.Model):
     d = models.DecimalField(max_digits=5, decimal_places=3)
 
 
+class DecimalWithoutPrecision(models.Model):
+    value = models.DecimalField()
+
+    class Meta:
+        required_db_features = {"supports_no_precision_decimalfield"}
+
+
 def get_foo():
     return Foo.objects.get(id=1).pk
 
@@ -452,6 +459,7 @@ class JSONNullDefaultModel(models.Model):
 class RelatedJSONModel(models.Model):
     value = models.JSONField()
     json_model = models.ForeignKey(NullableJSONModel, models.CASCADE)
+    summary = models.CharField(max_length=100, null=True, blank=True)
 
     class Meta:
         required_db_features = {"supports_json_field"}

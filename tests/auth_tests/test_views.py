@@ -61,6 +61,7 @@ class RedirectURLMixinTests(TestCase):
     LANGUAGE_CODE="en",
     TEMPLATES=AUTH_TEMPLATES,
     ROOT_URLCONF="auth_tests.urls",
+    MAILERS={"default": {"BACKEND": "django.core.mail.backends.locmem.EmailBackend"}},
 )
 class AuthViewsTestCase(TestCase):
     """
@@ -1555,7 +1556,8 @@ class ChangelistTests(MessagesTestMixin, AuthViewsTestCase):
         # Usable password field.
         self.assertContains(
             response,
-            "<fieldset><legend>Password-based authentication:</legend>",
+            '<fieldset class="flex-container">'
+            "<legend>Password-based authentication:</legend>",
         )
         # Submit buttons
         self.assertContains(response, '<input type="submit" name="set-password"')

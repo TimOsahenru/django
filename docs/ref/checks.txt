@@ -84,6 +84,7 @@ Django's system checks are organized using the following tags:
   or if you specify configured database aliases using the ``--database`` option
   when calling the :djadmin:`check` command.
 * ``files``: Checks files related configuration.
+* ``mail``: Checks email related configuration.
 * ``models``: Checks of model, field, and manager definitions.
 * ``security``: Checks security related configuration.
 * ``signals``: Checks on signal declarations and handler registrations.
@@ -150,6 +151,18 @@ If you're using MySQL or MariaDB, the following checks will be performed:
   ``<alias>``. See also :ref:`mysql-sql-mode`.
 * **mysql.W003**: MySQL/MariaDB may not allow unique ``CharField``\s to have a
   ``max_length`` > 255.
+
+Mail
+----
+
+The following checks verify that your :setting:`MAILERS` setting is correctly
+configured:
+
+* **mail.E001**: Your :setting:`MAILERS` setting uses a development-only email
+  backend in the ``'default'`` entry (``<backend>``). (Only checked when the
+  :option:`check --deploy` option is used.)
+* **mail.W001**: Your :setting:`MAILERS` setting has no ``'default'`` entry.
+  Sending email without a valid mailer will fail.
 
 Managing files
 --------------
@@ -309,7 +322,8 @@ Related fields
 * **fields.E322**: Field specifies ``on_delete=DB_SET_DEFAULT``, but has no
   ``db_default`` value.
 * **fields.E323**: Field specifies database/Python-level on_delete variant, but
-  referenced model uses python/database-level variant.
+  referenced/auto-created intermediary model uses python/database-level
+  variant.
 * **fields.E324**: ``<database>`` does not support
   ``<database delete option>``.
 * **fields.E330**: ``ManyToManyField``\s cannot be unique.
@@ -592,8 +606,6 @@ The following checks are run if you use the :option:`check --deploy` option:
   ``'django-insecure-'`` indicating that it was generated automatically by
   Django. Please generate a long and random value, otherwise many of Django's
   security-critical features will be vulnerable to attack.
-* **security.E026**: The CSP setting ``<SETTING_NAME>`` must be a dictionary
-  (got ``<value>`` instead).
 
 The following checks verify that your security-related settings are correctly
 configured:
@@ -604,6 +616,11 @@ configured:
   correct number of arguments.
 * **security.E102**: The CSRF failure view ``'path.to.view'`` could not be
   imported.
+* **security.E026**: The CSP setting ``<SETTING_NAME>`` must be a dictionary
+  (got ``<value>`` instead).
+* **security.W027**: Your Content Security Policy includes ``CSP.NONCE`` and
+  :class:`~django.middleware.csp.ContentSecurityPolicyMiddleware` is enabled,
+  but ``django.template.context_processors.csp`` is not configured.
 
 Signals
 -------
@@ -756,6 +773,8 @@ with the admin site:
   referenced by ``<modeladmin>.autocomplete_fields``.
 * **admin.E040**: ``<modeladmin>`` must define ``search_fields``, because
   it's referenced by ``<other_modeladmin>.autocomplete_fields``.
+* **admin.E041**: The value of ``delete_confirmation_max_display`` must be a
+  non-negative integer or ``None``.
 
 ``ModelAdmin``
 ~~~~~~~~~~~~~~
@@ -967,7 +986,8 @@ The following checks are performed on any model using a
 The following checks verify that :mod:`django.contrib.sites` is correctly
 configured:
 
-* **sites.E101**: The :setting:`SITE_ID` setting must be an integer.
+* **sites.E101**: The :setting:`SITE_ID` setting must be of type ``<type>``.
+  *or* The :setting:`SITE_ID` setting failed to validate: ``<error>``.
 
 ``staticfiles``
 ---------------

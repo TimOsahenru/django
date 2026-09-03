@@ -576,13 +576,14 @@ Customize the login URL or field name for authenticated views with the
 .. class:: RemoteUserMiddleware
 
     Middleware for utilizing web server provided authentication. See
-    :doc:`/howto/auth-remote-user` for usage details.
+    :doc:`/howto/auth-remote-user` for usage details, including security
+    considerations.
 
 .. class:: PersistentRemoteUserMiddleware
 
     Middleware for utilizing web server provided authentication when enabled
     only on the login page. See :ref:`persistent-remote-user-middleware-howto`
-    for usage details.
+    for usage details, including security considerations.
 
 CSRF protection middleware
 --------------------------
@@ -614,8 +615,6 @@ Content Security Policy middleware
 .. currentmodule:: django.middleware.csp
 
 .. class:: ContentSecurityPolicyMiddleware
-
-.. versionadded:: 6.0
 
 Adds support for Content Security Policy (CSP), which helps mitigate risks such
 as Cross-Site Scripting (XSS) and data injection attacks by controlling the
@@ -715,9 +714,9 @@ Here are some hints about the ordering of various Django middleware classes:
 
 #. :class:`~django.middleware.csp.ContentSecurityPolicyMiddleware`
 
-   Can be placed near the bottom, but ensure any middleware that accesses
-   :ref:`csp_nonce <csp-nonce>` is positioned after it, so the nonce is
-   properly included in the response header.
+   Can be placed near the bottom, but since the :ref:`csp_nonce <csp-nonce>` is
+   lazy, ensure any middleware that accesses it is positioned after, so the
+   nonce is generated before this middleware builds the response header.
 
 #. :class:`~django.contrib.flatpages.middleware.FlatpageFallbackMiddleware`
 

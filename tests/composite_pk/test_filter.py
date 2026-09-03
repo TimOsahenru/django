@@ -539,6 +539,12 @@ class CompositePKFilterTests(TestCase):
         with self.assertRaisesMessage(ValueError, msg):
             Comment.objects.filter(pk=pk)
 
+    def test_filter_by_pk_exact_rhs_f_object(self):
+        self.assertEqual(
+            Comment.objects.filter(pk=F("pk")).count(),
+            Comment.objects.count(),
+        )
+
     @skipUnlessDBFeature("allow_sliced_subqueries_with_in")
     def test_filter_comments_by_pk_exact_subquery(self):
         self.assertSequenceEqual(
@@ -607,3 +613,30 @@ class CompositePKFilterTupleLookupFallbackTests(CompositePKFilterTests):
         )
         self.enterContext(feature_patch_1)
         self.enterContext(feature_patch_2)
+
+
+class CompositePKExcludeNoneTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.tenant = Tenant.objects.create()
+        cls.user = User.objects.create(
+            tenant=cls.tenant, id=1, email="exclude@example.com"
+        )
+
+    def test_filter_pk_in_partial_none(self):
+        self.assertQuerySetEqual(
+            User.objects.filter(pk__in=[(self.user.pk[0], None)]), []
+        )
+
+    def test_filter_pk_in_full_none(self):
+        self.assertQuerySetEqual(User.objects.filter(pk__in=[(None, None)]), [])
+
+    def test_exclude_pk_in_partial_none(self):
+        self.assertQuerySetEqual(
+            User.objects.exclude(pk__in=[(self.user.pk[0], None)]), [self.user]
+        )
+
+    def test_exclude_pk_in_full_none(self):
+        self.assertQuerySetEqual(
+            User.objects.exclude(pk__in=[(None, None)]), [self.user]
+        )

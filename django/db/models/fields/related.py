@@ -348,6 +348,24 @@ class RelatedField(FieldCacheMixin, Field):
                     )
                 )
 
+        # Check clash between reverse accessor and manager names on
+        # the target model.
+        if not rel_is_hidden:
+            manager_names = {m.name for m in rel_opts.managers}
+            if rel_name in manager_names:
+                errors.append(
+                    checks.Error(
+                        f"Related name '{rel_name}' for '{field_name}' "
+                        f"clashes with the name of a model manager.",
+                        hint=(
+                            "Rename the model manager or change the related_name "
+                            "argument in the definition for field '%s'." % field_name
+                        ),
+                        obj=self,
+                        id="fields.E348",
+                    )
+                )
+
         return errors
 
     def db_type(self, connection):
@@ -583,13 +601,20 @@ class ForeignObject(RelatedField):
         obj.__dict__.pop("reverse_path_infos", None)
         return obj
 
+    @property
+    def non_db_attrs(self):
+        if isinstance(self.remote_field.on_delete, DatabaseOnDelete):
+            # Database-level on_delete options are part of the column
+            # definition.
+            return super().non_db_attrs
+        return super().non_db_attrs + ("on_delete",)
+
     def check(self, **kwargs):
         return [
             *super().check(**kwargs),
             *self._check_to_fields_exist(),
             *self._check_to_fields_composite_pk(),
             *self._check_unique_target(),
-            *self._check_conflict_with_managers(),
         ]
 
     def _check_to_fields_exist(self):
@@ -718,27 +743,6 @@ class ForeignObject(RelatedField):
                     )
                 ]
         return []
-
-    def _check_conflict_with_managers(self):
-        errors = []
-        manager_names = {manager.name for manager in self.opts.managers}
-        for rel_objs in self.model._meta.related_objects:
-            related_object_name = rel_objs.name
-            if related_object_name in manager_names:
-                field_name = f"{self.model._meta.object_name}.{self.name}"
-                errors.append(
-                    checks.Error(
-                        f"Related name '{related_object_name}' for '{field_name}' "
-                        "clashes with the name of a model manager.",
-                        hint=(
-                            "Rename the model manager or change the related_name "
-                            f"argument in the definition for field '{field_name}'."
-                        ),
-                        obj=self,
-                        id="fields.E348",
-                    )
-                )
-        return errors
 
     def deconstruct(self):
         name, path, args, kwargs = super().deconstruct()
@@ -1537,6 +1541,7 @@ class ManyToManyField(RelatedField):
             *self._check_relationship_model(**kwargs),
             *self._check_ignored_options(**kwargs),
             *self._check_table_uniqueness(**kwargs),
+            *self._check_on_delete(**kwargs),
         ]
 
     def _check_unique(self, **kwargs):
@@ -1896,6 +1901,50 @@ class ManyToManyField(RelatedField):
                 )
             ]
         return []
+
+    def _check_on_delete(self, **kwargs):
+        errors = []
+        if (
+            isinstance(self.remote_field.through, str)
+            or not self.remote_field.through._meta.auto_created
+        ):
+            # Manually created through models are checked on their own.
+            return []
+        # Database and Python cascade variants cannot be mixed in a chain of
+        # model references. Auto-created through models are using Python
+        # variants.
+        m2m_through_remote_fields = (
+            m2m_model_field.remote_field
+            for m2m_model_field in self.remote_field.through._meta.get_fields()
+            if m2m_model_field.remote_field
+            and not isinstance(m2m_model_field.remote_field.model, str)
+        )
+        ref_model_fields = (
+            ref_model_field
+            for remote_field in m2m_through_remote_fields
+            for ref_model_field in remote_field.model._meta.get_fields()
+            if ref_model_field.related_model
+            and hasattr(ref_model_field.remote_field, "on_delete")
+        )
+        for ref_model_field in ref_model_fields:
+            if (
+                ref_model_field.remote_field.on_delete is not None
+                and ref_model_field.remote_field.on_delete != DO_NOTHING
+                and isinstance(ref_model_field.remote_field.on_delete, DatabaseOnDelete)
+            ):
+                errors.append(
+                    checks.Error(
+                        "Field specifies database-level on_delete variant, but "
+                        "auto-created intermediary model uses Python-level variant.",
+                        hint=(
+                            "Use either one of the Python on_delete variants or "
+                            f"create a through model for {self}."
+                        ),
+                        obj=ref_model_field,
+                        id="fields.E323",
+                    )
+                )
+        return errors
 
     def deconstruct(self):
         name, path, args, kwargs = super().deconstruct()

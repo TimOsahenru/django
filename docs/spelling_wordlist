@@ -52,6 +52,7 @@ benchmarking
 Benoit
 Berners
 Biggs
+Biome
 bitwise
 Bjørn
 blazingly
@@ -87,12 +88,14 @@ codebase
 codec
 codename
 codenamed
+codenames
 coercible
 commenters
 conf
 config
 contenttypes
 contrib
+cooldown
 coroutine
 coroutines
 counterintuitive
@@ -316,6 +319,7 @@ needsinfo
 needsnewfeatureprocess
 německy
 nginx
+nitpicky
 noding
 nonces
 nonnegative
@@ -389,7 +393,7 @@ queryset
 querysets
 querystring
 queueing
-Quickstart
+quickstart
 quoteless
 Radziej
 rasters
@@ -420,6 +424,7 @@ reindent
 releaser
 releasers
 reloader
+remediator
 renderer
 renderers
 repo
@@ -560,7 +565,7 @@ unpythonic
 Unregisters
 unrendered
 unreproducible
-Unreviewed
+unreviewed
 unsanitized
 unselected
 unsets

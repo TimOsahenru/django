@@ -170,6 +170,18 @@ Here's the formal declaration of a ``QuerySet``:
         :meth:`order_by` clause or a default ordering on the model.
         ``False`` otherwise.
 
+    .. attribute:: totally_ordered
+
+        .. versionadded:: 6.1
+
+        Returns ``True`` if the ``QuerySet`` is ordered and the ordering is
+        deterministic. This requires that the ordering includes a field
+        (or set of fields) that is unique and non-nullable.
+
+        For queries involving a ``GROUP BY`` clause, the model's default
+        ordering is ignored. Ordering specified via ``.extra(order_by=...)``
+        is also ignored.
+
     .. attribute:: db
 
         The database that will be used if this query is executed now.
@@ -330,9 +342,9 @@ interested in the exact number of entries, you could do this:
     >>> blogs = Blog.objects.alias(entries=Count("entry")).filter(entries__gt=5)
 
 ``alias()`` can be used in conjunction with :meth:`annotate`, :meth:`exclude`,
-:meth:`filter`, :meth:`order_by`, and :meth:`update`. To use aliased expression
-with other methods (e.g. :meth:`aggregate`), you must promote it to an
-annotation::
+:meth:`filter`, :meth:`order_by`, and :meth:`update`. To use an aliased
+expression with other methods (e.g. :meth:`aggregate`), you must promote it to
+an annotation::
 
     Blog.objects.alias(entries=Count("entry")).annotate(
         entries=F("entries"),
@@ -341,9 +353,9 @@ annotation::
 :meth:`filter` and :meth:`order_by` can take expressions directly, but
 expression construction and usage often does not happen in the same place (for
 example, ``QuerySet`` method creates expressions, for later use in views).
-``alias()`` allows building complex expressions incrementally, possibly
-spanning multiple methods and modules, refer to the expression parts by their
-aliases and only use :meth:`annotate` for the final result.
+``alias()`` allows building complex expressions incrementally (possibly
+spanning multiple methods and modules), referring to the expression parts by
+their aliases, and only using :meth:`annotate` for the final result.
 
 ``order_by()``
 ~~~~~~~~~~~~~~
@@ -1124,13 +1136,6 @@ is defined. Instead of specifying the field name, use the :attr:`related_name
 <django.db.models.ForeignKey.related_name>` for the field on the related
 object.
 
-There may be some situations where you wish to call ``select_related()`` with a
-lot of related objects, or where you don't know all of the relations. In these
-cases it is possible to call ``select_related()`` with no arguments. This will
-follow all non-null foreign keys it can find - nullable foreign keys must be
-specified. This is not recommended in most cases as it is likely to make the
-underlying query more complex, and return more data, than is actually needed.
-
 If you need to clear the list of related fields added by past calls of
 ``select_related`` on a ``QuerySet``, you can pass ``None`` as a parameter:
 
@@ -1141,6 +1146,18 @@ If you need to clear the list of related fields added by past calls of
 Chaining ``select_related`` calls works in a similar way to other methods -
 that is that ``select_related('foo', 'bar')`` is equivalent to
 ``select_related('foo').select_related('bar')``.
+
+There may be some situations where you wish to call ``select_related()`` with a
+lot of related objects, or where you don't know all of the relations. In these
+cases it is possible to call ``select_related()`` with no arguments. This will
+follow all non-null foreign keys it can find - nullable foreign keys must be
+specified. This is not recommended in most cases as it is likely to make the
+underlying query more complex, and return more data, than is actually needed.
+
+.. deprecated:: 6.1
+
+    Calling ``select_related()`` with no arguments is deprecated, and support
+    for it will be removed in Django 7.0. Specify the fields to fetch instead.
 
 ``prefetch_related()``
 ~~~~~~~~~~~~~~~~~~~~~~
@@ -2523,9 +2540,9 @@ them, but it has a few caveats:
     from itertools import islice
 
     batch_size = 100
-    ids_iter = range(1000)
+    ids_iter = iter(range(1000))
     while ids := list(islice(ids_iter, batch_size)):
-        batch = Entry.objects.filter(ids__in=ids)
+        batch = Entry.objects.filter(id__in=ids)
         for entry in batch:
             entry.headline = f"Updated headline {entry.pk}"
         Entry.objects.bulk_update(batch, ["headline"], batch_size=batch_size)
@@ -2625,15 +2642,14 @@ If you pass ``in_bulk()`` an empty list, you'll get an empty dictionary.
 
 *Asynchronous version*: ``aiterator()``
 
-Evaluates the ``QuerySet`` (by performing the query) and returns an iterator
-(see :pep:`234`) over the results, or an asynchronous iterator (see :pep:`492`)
-if you call its asynchronous version ``aiterator``.
+Evaluates the ``QuerySet`` (by performing the query) and returns an
+:term:`python:iterator` over the results, or an :term:`python:asynchronous
+iterator` if you call its asynchronous version ``aiterator``.
 
 A ``QuerySet`` typically caches its results internally so that repeated
 evaluations do not result in additional queries. In contrast, ``iterator()``
-will read results directly, without doing any caching at the ``QuerySet`` level
-(internally, the default iterator calls ``iterator()`` and caches the return
-value). For a ``QuerySet`` which returns a large number of objects that you
+will read results directly, without doing any caching at the ``QuerySet``
+level. For a ``QuerySet`` which returns a large number of objects that you
 only need to access once, this can result in better performance and a
 significant reduction in memory.
 
@@ -2774,8 +2790,9 @@ the direction is changed.
 *Asynchronous version*: ``afirst()``
 
 Returns the first object matched by the queryset, or ``None`` if there
-is no matching object. If the ``QuerySet`` has no ordering defined, then the
-queryset is automatically ordered by the primary key. This can affect
+is no matching object. If the ``QuerySet`` has no ordering defined (and has not
+had ordering forcibly cleared by calling :meth:`order_by` with no arguments),
+then the queryset is automatically ordered by the primary key. This can affect
 aggregation results as described in :ref:`aggregation-ordering-interaction`.
 
 Example::
@@ -2789,6 +2806,12 @@ equivalent to the above example::
         p = Article.objects.order_by("title", "pub_date")[0]
     except IndexError:
         p = None
+
+.. versionchanged:: 6.1
+
+    ``first()`` and :meth:`last` no longer order by the primary key when
+    ordering has been forcibly cleared by calling :meth:`order_by` with no
+    arguments.
 
 ``last()``
 ~~~~~~~~~~
@@ -3136,7 +3159,7 @@ The output differs significantly between databases.
 ``explain()`` is supported by all built-in database backends except Oracle
 because an implementation there isn't straightforward.
 
-The ``format`` parameter changes the output format from the databases's
+The ``format`` parameter changes the output format from the database's
 default, which is usually text-based. PostgreSQL supports ``'TEXT'``,
 ``'JSON'``, ``'YAML'``, and ``'XML'`` formats. MariaDB and MySQL support
 ``'TEXT'`` (also called ``'TRADITIONAL'``) and ``'JSON'`` formats. MySQL
@@ -3256,6 +3279,8 @@ SQL equivalent:
 
     SELECT ... WHERE headline LIKE '%Lennon%';
 
+(The exact SQL syntax varies for each database engine.)
+
 Note this will match the headline ``'Lennon honored today'`` but not ``'lennon
 honored today'``.
 
@@ -3282,6 +3307,8 @@ SQL equivalent:
 .. code-block:: sql
 
     SELECT ... WHERE headline ILIKE '%Lennon%';
+
+(The exact SQL syntax varies for each database engine.)
 
 .. admonition:: SQLite users
 
@@ -3408,6 +3435,8 @@ SQL equivalent:
 
     SELECT ... WHERE headline LIKE 'Lennon%';
 
+(The exact SQL syntax varies for each database engine.)
+
 SQLite doesn't support case-sensitive ``LIKE`` statements; ``startswith`` acts
 like ``istartswith`` for SQLite.
 
@@ -3427,6 +3456,8 @@ SQL equivalent:
 .. code-block:: sql
 
     SELECT ... WHERE headline ILIKE 'Lennon%';
+
+(The exact SQL syntax varies for each database engine.)
 
 .. admonition:: SQLite users
 
@@ -3450,6 +3481,8 @@ SQL equivalent:
 
     SELECT ... WHERE headline LIKE '%Lennon';
 
+(The exact SQL syntax varies for each database engine.)
+
 .. admonition:: SQLite users
 
     SQLite doesn't support case-sensitive ``LIKE`` statements; ``endswith``
@@ -3471,7 +3504,9 @@ SQL equivalent:
 
 .. code-block:: sql
 
-    SELECT ... WHERE headline ILIKE '%Lennon'
+    SELECT ... WHERE headline ILIKE '%Lennon';
+
+(The exact SQL syntax varies for each database engine.)
 
 .. admonition:: SQLite users
 
@@ -3984,8 +4019,6 @@ by the aggregate.
 ``AnyValue``
 ~~~~~~~~~~~~
 
-.. versionadded:: 6.0
-
 .. class:: AnyValue(expression, output_field=None, filter=None, default=None, **extra)
 
     Returns an arbitrary value from the non-null input values.
@@ -4053,6 +4086,42 @@ by the aggregate.
         Optional. If ``distinct=True``, ``Avg`` returns the mean value of
         unique values. This is the SQL equivalent of ``AVG(DISTINCT <field>)``.
         The default value is ``False``.
+
+``BitAnd``
+~~~~~~~~~~
+
+.. class:: BitAnd(expression, filter=None, default=None, **extra)
+
+    .. versionadded:: 6.1
+
+    Returns an ``int`` of the bitwise ``AND`` of all non-null input values, or
+    ``default`` if all values are null.
+
+    The ``default`` parameter is not supported on MariaDB, MySQL, and Oracle.
+
+``BitOr``
+~~~~~~~~~
+
+.. class:: BitOr(expression, filter=None, default=None, **extra)
+
+    .. versionadded:: 6.1
+
+    Returns an ``int`` of the bitwise ``OR`` of all non-null input values, or
+    ``default`` if all values are null.
+
+    The ``default`` parameter is not supported on MariaDB, MySQL, and Oracle.
+
+``BitXor``
+~~~~~~~~~~
+
+.. class:: BitXor(expression, filter=None, default=None, **extra)
+
+    .. versionadded:: 6.1
+
+    Returns an ``int`` of the bitwise ``XOR`` of all non-null input values, or
+    ``default`` if all values are null.
+
+    The ``default`` parameter is not supported on MariaDB, MySQL, and Oracle.
 
 ``Count``
 ~~~~~~~~~
@@ -4154,8 +4223,6 @@ by the aggregate.
 ``StringAgg``
 ~~~~~~~~~~~~~
 
-.. versionadded:: 6.0
-
 .. class:: StringAgg(expression, delimiter, output_field=None, distinct=False, filter=None, order_by=None, default=None, **extra)
 
     Returns the input values concatenated into a string, separated by the
@@ -4168,7 +4235,14 @@ by the aggregate.
     .. attribute:: delimiter
 
         A ``Value`` or expression representing the string that should separate
-        each of the values. For example, ``Value(",")``.
+        each of the values. For example, ``Value(",")``. (On SQLite, the
+        literal delimiter ``Value(",")`` is the only delimiter compatible with
+        ``distinct=True``.)
+
+        .. versionchanged:: 6.1
+
+            Support for using ``distinct=True`` with a delimiter of
+            ``Value(",")`` on SQLite was added.
 
 Query-related tools
 ===================

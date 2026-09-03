@@ -26,7 +26,8 @@ from django.db.models import (
 )
 from django.db.models.functions import Cast, Concat
 from django.test import TestCase, skipUnlessDBFeature
-from django.test.utils import Approximate
+from django.test.utils import Approximate, ignore_warnings
+from django.utils.deprecation import RemovedInDjango70Warning
 
 from .models import (
     Alfa,
@@ -188,6 +189,14 @@ class AggregationTests(TestCase):
         )
         self.assertEqual(qs.order_by("id").count(), len(qs.order_by("id")))
         self.assertEqual(qs.extra(order_by=["id"]).count(), len(qs.order_by("id")))
+        self.assertEqual(qs.order_by("-id").count(), len(qs.order_by("-id")))
+        self.assertEqual(
+            qs.order_by("-publications").count(), len(qs.order_by("-publications"))
+        )
+        self.assertEqual(
+            qs.order_by("-contact__name").count(), len(qs.order_by("-contact__name"))
+        )
+        self.assertEqual(qs.order_by("?").count(), len(qs.order_by("?")))
 
     def test_annotation_with_value(self):
         values = (
@@ -636,10 +645,11 @@ class AggregationTests(TestCase):
                 Max("foo")
             )
 
-    def test_more(self):
+    def test_count_after_count_function(self):
         # Old-style count aggregations can be mixed with new-style
         self.assertEqual(Book.objects.annotate(num_authors=Count("authors")).count(), 6)
 
+    def test_aggregates_over_annotations(self):
         # Non-ordinal, non-computed Aggregates over annotations correctly
         # inherit the annotation's internal type if the annotation is ordinal
         # or computed
@@ -653,10 +663,12 @@ class AggregationTests(TestCase):
         )
         self.assertEqual(vals, {"avg_price__max": 75.0})
 
+    def test_aliases_quoted(self):
         # Aliases are quoted to protected aliases that might be reserved names
         vals = Book.objects.aggregate(number=Max("pages"), select=Max("pages"))
         self.assertEqual(vals, {"number": 1132, "select": 1132})
 
+    def test_select_related(self):
         # Regression for #10064: select_related() plays nice with aggregates
         obj = (
             Book.objects.select_related("publisher")
@@ -680,6 +692,7 @@ class AggregationTests(TestCase):
             },
         )
 
+    def test_exclude_on_aggregate(self):
         # Regression for #10010: exclude on an aggregate field is correctly
         # negated
         self.assertEqual(len(Book.objects.annotate(num_authors=Count("authors"))), 6)
@@ -871,12 +884,18 @@ class AggregationTests(TestCase):
 
     def test_annotate_select_related(self):
         # Regression for #10127 - Empty select_related() works with annotate
-        qs = (
-            Book.objects.filter(rating__lt=4.5)
-            .select_related()
-            .annotate(Avg("authors__age"))
-            .order_by("name")
-        )
+        # RemovedInDjango70Warning: when the deprecation ends, the below
+        # queryset and assertion can be removed.
+        with ignore_warnings(
+            category=RemovedInDjango70Warning,
+            message=r"Calling select_related\(\) with no arguments is deprecated\.",
+        ):
+            qs = (
+                Book.objects.filter(rating__lt=4.5)
+                .select_related()
+                .annotate(Avg("authors__age"))
+                .order_by("name")
+            )
         self.assertQuerySetEqual(
             qs,
             [

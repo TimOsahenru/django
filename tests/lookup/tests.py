@@ -2,7 +2,7 @@ import collections.abc
 from datetime import datetime
 from math import ceil
 from operator import attrgetter
-from unittest import mock, skipUnless
+from unittest import mock
 
 from django.core.exceptions import FieldError
 from django.db import connection, models
@@ -19,6 +19,7 @@ from django.db.models import (
     Value,
     When,
 )
+from django.db.models.expressions import RawSQL
 from django.db.models.functions import Abs, Cast, Length, Substr
 from django.db.models.lookups import (
     Exact,
@@ -29,7 +30,7 @@ from django.db.models.lookups import (
     LessThan,
     LessThanOrEqual,
 )
-from django.test import TestCase, skipUnlessDBFeature
+from django.test import TestCase, skipIfDBFeature, skipUnlessDBFeature
 from django.test.utils import ignore_warnings, isolate_apps, register_lookup
 from django.utils.deprecation import RemovedInDjango70Warning
 
@@ -367,6 +368,94 @@ class LookupTests(TestCase):
             {self.a1.pk: {"headline": "Article 1"}},
         )
 
+    def test_in_bulk_values_annotation(self):
+        arts = (
+            Article.objects.annotate(author_name=F("author__name"))
+            .values("headline", "author_name")
+            .in_bulk([self.a1.pk])
+        )
+        self.assertEqual(
+            arts,
+            {
+                self.a1.pk: {
+                    "headline": "Article 1",
+                    "author_name": "Author 1",
+                }
+            },
+        )
+
+    def test_in_bulk_values_annotation_all_fields(self):
+        arts = (
+            Article.objects.annotate(author_name=F("author__name"))
+            .values()
+            .in_bulk([self.a1.pk])
+        )
+        self.assertEqual(
+            arts,
+            {
+                self.a1.pk: {
+                    "id": self.a1.pk,
+                    "author_id": self.au1.pk,
+                    "headline": "Article 1",
+                    "pub_date": self.a1.pub_date,
+                    "slug": "a1",
+                    "author_name": "Author 1",
+                }
+            },
+        )
+
+    def test_in_bulk_values_extra_select_all_fields(self):
+        arts = (
+            Article.objects.extra(select={"marker": "1"}).values().in_bulk([self.a1.pk])
+        )
+        self.assertEqual(
+            arts,
+            {
+                self.a1.pk: {
+                    "marker": 1,
+                    "id": self.a1.pk,
+                    "author_id": self.au1.pk,
+                    "headline": "Article 1",
+                    "pub_date": self.a1.pub_date,
+                    "slug": "a1",
+                }
+            },
+        )
+
+    def test_in_bulk_values_list_annotation(self):
+        arts = (
+            Article.objects.annotate(author_name=F("author__name"))
+            .values_list("author_name", "headline")
+            .in_bulk([self.a1.pk])
+        )
+        self.assertEqual(arts, {self.a1.pk: ("Author 1", "Article 1")})
+
+    def test_in_bulk_values_list_annotation_before_pk(self):
+        arts = (
+            Article.objects.annotate(author_name=F("author__name"))
+            .values_list("author_name", "pk")
+            .in_bulk([self.a1.pk])
+        )
+        self.assertEqual(arts, {self.a1.pk: ("Author 1", self.a1.pk)})
+
+    def test_in_bulk_values_list_named_annotation(self):
+        arts = (
+            Article.objects.annotate(author_name=F("author__name"))
+            .values_list("headline", "author_name", named=True)
+            .in_bulk([self.a1.pk])
+        )
+        article = arts[self.a1.pk]
+        self.assertEqual(article._fields, ("pk", "headline", "author_name"))
+        self.assertEqual(article, (self.a1.pk, "Article 1", "Author 1"))
+
+    def test_in_bulk_values_list_flat_annotation(self):
+        arts = (
+            Article.objects.annotate(author_name=F("author__name"))
+            .values_list("author_name", flat=True)
+            .in_bulk([self.a1.pk])
+        )
+        self.assertEqual(arts, {self.a1.pk: "Author 1"})
+
     def test_in_bulk_values_fields_including_pk(self):
         arts = Article.objects.values("pk", "headline").in_bulk([self.a1.pk])
         self.assertEqual(
@@ -570,7 +659,7 @@ class LookupTests(TestCase):
             },
         )
 
-    def test_values(self):
+    def test_values_filter_and_no_fields(self):
         # values() returns a list of dictionaries instead of object instances,
         # and you can specify which fields you want to retrieve.
         self.assertSequenceEqual(
@@ -592,6 +681,8 @@ class LookupTests(TestCase):
                 },
             ],
         )
+
+    def test_values_single_field(self):
         self.assertSequenceEqual(
             Article.objects.values("headline"),
             [
@@ -604,10 +695,14 @@ class LookupTests(TestCase):
                 {"headline": "Article 1"},
             ],
         )
+
+    def test_values_filter_and_single_field(self):
         self.assertSequenceEqual(
             Article.objects.filter(pub_date__exact=datetime(2005, 7, 27)).values("id"),
             [{"id": self.a2.id}, {"id": self.a3.id}, {"id": self.a7.id}],
         )
+
+    def test_values_two_fields(self):
         self.assertSequenceEqual(
             Article.objects.values("id", "headline"),
             [
@@ -620,6 +715,8 @@ class LookupTests(TestCase):
                 {"id": self.a1.id, "headline": "Article 1"},
             ],
         )
+
+    def test_values_iterator(self):
         # You can use values() with iterator() for memory savings,
         # because iterator() uses database-level iteration.
         self.assertSequenceEqual(
@@ -634,6 +731,8 @@ class LookupTests(TestCase):
                 {"headline": "Article 1", "id": self.a1.id},
             ],
         )
+
+    def test_values_extra(self):
         # The values() method works with "extra" fields specified in
         # extra(select).
         self.assertSequenceEqual(
@@ -675,6 +774,8 @@ class LookupTests(TestCase):
                 }
             ],
         )
+
+    def test_values_relations(self):
         # You can specify fields from forward and reverse relations, just like
         # filter().
         self.assertSequenceEqual(
@@ -757,6 +858,8 @@ class LookupTests(TestCase):
                 },
             ],
         )
+
+    def test_values_nonexistent_field(self):
         # However, an exception FieldDoesNotExist will be thrown if you specify
         # a nonexistent field name in values() (a field that is neither in the
         # model nor in extra(select)).
@@ -768,6 +871,8 @@ class LookupTests(TestCase):
             Article.objects.extra(select={"id_plus_one": "id + 1"}).values(
                 "id", "id_plus_two"
             )
+
+    def test_values_no_field_names(self):
         # If you don't specify field names to values(), all are returned.
         self.assertSequenceEqual(
             Article.objects.filter(id=self.a5.id).values(),
@@ -782,7 +887,7 @@ class LookupTests(TestCase):
             ],
         )
 
-    def test_values_list(self):
+    def test_values_list_filter_and_no_fields(self):
         # values_list() is similar to values(), except that the results are
         # returned as a list of tuples, rather than a list of dictionaries.
         # Within each tuple, the order of the elements is the same as the order
@@ -806,8 +911,9 @@ class LookupTests(TestCase):
                 ),
             ],
         )
-        # RemovedInDjango70Warning: When the deprecation ends, remove this
-        # assertion.
+
+    # RemovedInDjango70Warning: When the deprecation ends, remove this test.
+    def test_values_list_flat_no_fields(self):
         with ignore_warnings(category=RemovedInDjango70Warning):
             qs = Article.objects.values_list(flat=True)
         self.assertSequenceEqual(
@@ -822,6 +928,8 @@ class LookupTests(TestCase):
                 self.a1.id,
             ],
         )
+
+    def test_values_list_single_field(self):
         self.assertSequenceEqual(
             Article.objects.values_list("headline"),
             [
@@ -834,6 +942,8 @@ class LookupTests(TestCase):
                 ("Article 1",),
             ],
         )
+
+    def test_values_list_single_field_order_by(self):
         self.assertSequenceEqual(
             Article.objects.values_list("id").order_by("id"),
             [
@@ -846,6 +956,8 @@ class LookupTests(TestCase):
                 (self.a7.id,),
             ],
         )
+
+    def test_values_list_flat_order_by(self):
         self.assertSequenceEqual(
             Article.objects.values_list("id", flat=True).order_by("id"),
             [
@@ -858,6 +970,8 @@ class LookupTests(TestCase):
                 self.a7.id,
             ],
         )
+
+    def test_values_list_extra(self):
         self.assertSequenceEqual(
             Article.objects.extra(select={"id_plus_one": "id+1"})
             .order_by("id")
@@ -900,6 +1014,8 @@ class LookupTests(TestCase):
                 (self.a7.id, self.a7.id + 1),
             ],
         )
+
+    def test_values_list_relations(self):
         args = ("name", "article__headline", "article__tag__name")
         self.assertSequenceEqual(
             Author.objects.values_list(*args).order_by(*args),
@@ -915,7 +1031,10 @@ class LookupTests(TestCase):
                 (self.au2.name, self.a7.headline, self.t3.name),
             ],
         )
-        with self.assertRaises(TypeError):
+
+    def test_values_list_flat_more_than_one_field(self):
+        msg = "'flat' is not valid when values_list is called with more than one field."
+        with self.assertRaisesMessage(TypeError, msg):
             Article.objects.values_list("id", "headline", flat=True)
 
     # RemovedInDjango70Warning: When the deprecation ends, replace with:
@@ -1055,6 +1174,28 @@ class LookupTests(TestCase):
 
     def test_in_empty_list(self):
         self.assertSequenceEqual(Article.objects.filter(id__in=[]), [])
+
+    def test_in_iterator_rhs(self):
+        tests = [
+            ("direct values", [self.a1.id, self.a2.id]),
+            ("expression", [self.a1.id, Value(self.a2.id)]),
+        ]
+        for case, values in tests:
+            with self.subTest(case=case):
+                self.assertCountEqual(
+                    Article.objects.alias(article_id=F("id")).filter(
+                        article_id__in=iter(values)
+                    ),
+                    [self.a1, self.a2],
+                )
+
+    def test_range_iterator_rhs(self):
+        self.assertCountEqual(
+            Article.objects.alias(article_id=F("id")).filter(
+                article_id__range=iter([self.a1.id, self.a2.id])
+            ),
+            [self.a1, self.a2],
+        )
 
     def test_in_different_database(self):
         with self.assertRaisesMessage(
@@ -1561,10 +1702,10 @@ class LookupTests(TestCase):
         with self.assertRaisesMessage(ValueError, msg):
             list(Article.objects.filter(author=Author.objects.all()[1:]))
 
-    @skipUnless(connection.vendor == "mysql", "MySQL-specific workaround.")
+    @skipIfDBFeature("has_native_boolean_field")
     def test_exact_booleanfield(self):
-        # MySQL ignores indexes with boolean fields unless they're compared
-        # directly to a boolean value.
+        # Most databases without a native boolean type ignore indexes on them
+        # unless they're compared directly to a literal value.
         product = Product.objects.create(name="Paper", qty_target=5000)
         Stock.objects.create(product=product, short=False, qty_available=5100)
         stock_1 = Stock.objects.create(product=product, short=True, qty_available=180)
@@ -1575,10 +1716,41 @@ class LookupTests(TestCase):
             str(qs.query),
         )
 
-    @skipUnless(connection.vendor == "mysql", "MySQL-specific workaround.")
+    @skipIfDBFeature("has_native_boolean_field")
     def test_exact_booleanfield_annotation(self):
-        # MySQL ignores indexes with boolean fields unless they're compared
-        # directly to a boolean value.
+        # Most databases without a native boolean type ignore indexes on them
+        # unless they're compared directly to a literal value.
+        product = Product.objects.create(name="Paper", qty_target=5000)
+        Stock.objects.create(product=product, short=False, qty_available=5100)
+        stock_1 = Stock.objects.create(product=product, short=True, qty_available=180)
+        qs = Stock.objects.annotate(
+            short_annotation=F("short"),
+        ).filter(short_annotation=True)
+        self.assertSequenceEqual(qs, [stock_1])
+        self.assertIn(" = True", str(qs.query))
+        # ExpressionWrapper should be unwrapped.
+        qs = Stock.objects.annotate(
+            short_wrapper=ExpressionWrapper(
+                F("short"),
+                output_field=BooleanField(),
+            )
+        ).filter(short_wrapper=True)
+        self.assertSequenceEqual(qs, [stock_1])
+        self.assertIn(" = True", str(qs.query))
+        # Q which resolve to WhereNode should not be compared to a boolean
+        # value as it's compatible by definition.
+        qs = Author.objects.annotate(
+            node=Q(alias="a1"),
+        ).filter(node=True)
+        self.assertSequenceEqual(qs, [self.au1])
+        self.assertNotIn(" = True", str(qs.query))
+        # EXISTS(...) shouldn't be compared to a boolean value.
+        qs = Author.objects.annotate(
+            exists=Exists(Author.objects.filter(alias="a1", pk=OuterRef("pk"))),
+        ).filter(exists=True)
+        self.assertSequenceEqual(qs, [self.au1])
+        self.assertNotIn(" = True", str(qs.query))
+        # CASE shouldn't be compared to a boolean value.
         qs = Author.objects.annotate(
             case=Case(
                 When(alias="a1", then=True),
@@ -1587,17 +1759,15 @@ class LookupTests(TestCase):
             )
         ).filter(case=True)
         self.assertSequenceEqual(qs, [self.au1])
-        self.assertIn(" = True", str(qs.query))
-
-        qs = Author.objects.annotate(
-            wrapped=ExpressionWrapper(Q(alias="a1"), output_field=BooleanField()),
-        ).filter(wrapped=True)
-        self.assertSequenceEqual(qs, [self.au1])
-        self.assertIn(" = True", str(qs.query))
-        # EXISTS(...) shouldn't be compared to a boolean value.
-        qs = Author.objects.annotate(
-            exists=Exists(Author.objects.filter(alias="a1", pk=OuterRef("pk"))),
-        ).filter(exists=True)
+        self.assertEqual(str(qs.query).count(" = True"), 1)
+        # Conditional usage of RawSQL usage should not be compared to a boolean
+        # value.
+        queryset = Author.objects.all()
+        compiler = queryset.query.get_compiler(connection=connection)
+        sql, params = compiler.compile(Q(alias="a1").resolve_expression(queryset.query))
+        qs = Author.objects.alias(
+            raw=RawSQL(sql, params, BooleanField()),
+        ).filter(raw=True)
         self.assertSequenceEqual(qs, [self.au1])
         self.assertNotIn(" = True", str(qs.query))
 
